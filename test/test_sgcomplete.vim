@@ -110,6 +110,34 @@ call assert_equal('Acme Corp', getline(1),
 bwipeout!
 
 " ---------------------------------------------------------------------------
+" 9. Per-project sources: a single registration with a *relative* path
+" must serve different content depending on Vim's current working
+" directory, including a ':cd' mid-session (no restart needed) -- and
+" must not be fooled into serving stale, wrong-project candidates when
+" the two backing files happen to share an mtime (regression: caching
+" keyed on mtime alone, without the resolved path, served project A's
+" cached candidates for project B after 'cd' whenever both files'
+" mtimes coincided).
+let s:orig_cwd = getcwd()
+let s:cwd_a = s:fixtures . '/cwd-a'
+let s:cwd_b = s:fixtures . '/cwd-b'
+" Force identical mtimes so this test actually exercises the mtime-collision
+" case rather than accidentally passing because the mtimes happened to differ.
+call system('touch -t 202501010000 ' . shellescape(s:cwd_a . '/slot1.txt')
+      \ . ' ' . shellescape(s:cwd_b . '/slot1.txt'))
+
+execute 'cd ' . fnameescape(s:cwd_a)
+call sgcomplete#Register('cwdslot', 'slot1.txt', '<F6>')
+call assert_equal(['Alice'], sgcomplete#Matches('cwdslot', ''),
+      \ 'relative-path source should serve project A''s file when cwd is project A')
+
+execute 'cd ' . fnameescape(s:cwd_b)
+call assert_equal(['Bob'], sgcomplete#Matches('cwdslot', ''),
+      \ 'relative-path source should serve project B''s file after :cd, even with a matching mtime')
+
+execute 'cd ' . fnameescape(s:orig_cwd)
+
+" ---------------------------------------------------------------------------
 let s:result_file = $SGCOMPLETE_TEST_OUT
 if len(v:errors) == 0
   call writefile(['ALL TESTS PASSED'], s:result_file)

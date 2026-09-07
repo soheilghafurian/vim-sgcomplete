@@ -41,11 +41,25 @@ endfunction
 
 " Return cached candidates for a:name, re-reading the backing file only
 " when it has changed on disk (or hasn't been read yet).
+"
+" src.file may be a relative path, which resolves against Vim's current
+" working directory -- this is what lets a single source registration
+" transparently serve different content in different projects (see
+" doc/sgcomplete.txt, "per-project sources"). Because of that, the cache
+" must key on the *resolved path* as well as its mtime: keying on mtime
+" alone would wrongly serve project A's cached candidates to project B
+" after a `:cd`, whenever the two backing files happen to share an mtime.
 function! s:GetCandidates(name) abort
   let src = s:sources[a:name]
   let path = expand(src.file)
+  " A plain relative path (no '~', '$VAR', wildcard, ...) passes through
+  " expand() unchanged, so it alone can't reveal that ':cd' moved us to a
+  " different underlying file. Canonicalize to an absolute path (which
+  " *does* incorporate the current working directory) for cache-keying.
+  let abspath = fnamemodify(path, ':p')
   let ftime = filereadable(path) ? getftime(path) : -1
-  if src.ftime !=# ftime
+  if src.path !=# abspath || src.ftime !=# ftime
+    let src.path = abspath
     let src.ftime = ftime
     let src.candidates = s:ReadCandidates(src.file)
   endif
@@ -72,7 +86,7 @@ function! sgcomplete#Register(name, file, map) abort
     return
   endif
 
-  let s:sources[a:name] = {'file': a:file, 'map': a:map, 'ftime': -2, 'candidates': []}
+  let s:sources[a:name] = {'file': a:file, 'map': a:map, 'path': '', 'ftime': -2, 'candidates': []}
 
   " complete() cannot be called from an <expr> mapping (textlock), so we
   " use the <C-r>=...<CR> idiom: the expression register evaluation runs

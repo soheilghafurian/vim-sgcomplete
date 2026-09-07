@@ -10,8 +10,9 @@ CONTENTS                                                *sgcomplete-contents*
     5. Usage ................................. |sgcomplete-usage|
     6. Commands .............................. |sgcomplete-commands|
     7. Examples ............................... |sgcomplete-examples|
-    8. Troubleshooting ........................ |sgcomplete-troubleshooting|
-    9. Design notes ........................... |sgcomplete-design|
+    8. Per-project sources .................... |sgcomplete-per-project|
+    9. Troubleshooting ........................ |sgcomplete-troubleshooting|
+   10. Design notes ........................... |sgcomplete-design|
 
 ==============================================================================
 1. INTRODUCTION                                      *sgcomplete-introduction*
@@ -139,7 +140,46 @@ While editing, typing `Jo<C-x><C-n>` shows "John Smith" and "Jordan Lee"
 only — never candidates from companies.txt or projects.txt.
 
 ==============================================================================
-8. TROUBLESHOOTING                                  *sgcomplete-troubleshooting*
+8. PER-PROJECT SOURCES                                    *sgcomplete-per-project*
+
+You may want the *same key bindings* to complete different, project-local
+content depending on where you ran Vim from -- e.g. `<C-x>n` should offer
+teammate names in one repo and ticket IDs in another, without registering
+anything per project.
+
+This falls out of the existing design for free: a source's backing file
+is re-resolved and re-read on every invocation, not just once at
+registration. So if you register with a *relative* path, it resolves
+against Vim's current working directory (|getcwd()|) at completion time --
+including after a `:cd` in a still-running Vim, no restart required.
+
+Register a fixed roster of generically-named "slots", each bound to a
+permanent key, in your vimrc: >
+
+    let g:sgcomplete_sources = [
+          \ {'name': 'slot1', 'file': '.vim-completions/slot1.txt', 'map': '<C-x>1'},
+          \ {'name': 'slot2', 'file': '.vim-completions/slot2.txt', 'map': '<C-x>2'},
+          \ {'name': 'slot3', 'file': '.vim-completions/slot3.txt', 'map': '<C-x>3'},
+          \ ]
+<
+Then in each project, create whatever you want at `.vim-completions/slot1.txt`
+relative to that project's root (or wherever you `:cd`/open Vim from) --
+teammate names in one repo, ticket IDs in another. `<C-x>1` never changes;
+only its meaning does, per project. A project that doesn't have `slot3.txt`
+simply gets no candidates for that key, per |sgcomplete-file-format|.
+
+Caveats:
+- Resolution is against |getcwd()|, not the edited file's directory. If
+  you rely on `'autochdir'` or manually `:cd` per project, this works
+  naturally; if your working directory never changes regardless of what
+  you're editing, the file won't vary either.
+- If you want sources chosen by walking up to a project marker (e.g. the
+  nearest `.git`) rather than by plain |getcwd()|-relativity, that is not
+  built in; you would need a small autocommand of your own to `:cd` (or
+  `:lcd`) to the detected root.
+
+==============================================================================
+9. TROUBLESHOOTING                                  *sgcomplete-troubleshooting*
 
 Nothing happens when I press my mapping~
     - Check `:SgCompleteSources` to confirm the source registered. If it's
@@ -170,7 +210,7 @@ My existing dictionary/omni/keyword completion stopped working~
       it's a conflict with another plugin, not vim-sgcomplete.
 
 ==============================================================================
-9. DESIGN NOTES                                              *sgcomplete-design*
+10. DESIGN NOTES                                             *sgcomplete-design*
 
 Each registered source gets a dedicated |:map-expr| insert-mode mapping.
 Invoking it calls |complete()| directly with a start column and an
