@@ -67,11 +67,26 @@ call assert_equal(s:preexisting_rhs_before, maparg('<Plug>(PreExisting)', 'i'),
 call assert_equal([], sgcomplete#Matches('shouldnotwin', ''))
 
 " ---------------------------------------------------------------------------
-" 7. ignorecase honored the same way Vim's own completion honors it.
-set ignorecase
-call assert_equal(['John Smith', 'Jordan Lee'], sgcomplete#Matches('names', 'jo'))
+" 7. g:sgcomplete_ignorecase controls case-sensitivity, independently of
+" Vim's own 'ignorecase' (which stays untouched, so search etc. are
+" unaffected). Default (unset) is case-insensitive.
 set noignorecase
-call assert_equal([], sgcomplete#Matches('names', 'jo'))
+call assert_equal(['John Smith', 'Jordan Lee'], sgcomplete#Matches('names', 'jo'),
+      \ 'default (g:sgcomplete_ignorecase unset) should be case-insensitive regardless of &ignorecase')
+
+let g:sgcomplete_ignorecase = 0
+call assert_equal([], sgcomplete#Matches('names', 'jo'),
+      \ 'g:sgcomplete_ignorecase = 0 should make matching case-sensitive, even though &ignorecase is off'
+      \ . ' (i.e. unrelated to &ignorecase either way)')
+call assert_equal(['John Smith', 'Jordan Lee'], sgcomplete#Matches('names', 'Jo'))
+
+" The exact scenario this option exists for: completion case-insensitive
+" while search/etc. (&ignorecase) stays case-sensitive, untouched.
+let g:sgcomplete_ignorecase = 1
+call assert_equal(0, &ignorecase, 'sanity: &ignorecase must still be off here')
+call assert_equal(['John Smith', 'Jordan Lee'], sgcomplete#Matches('names', 'jo'),
+      \ 'g:sgcomplete_ignorecase = 1 should be case-insensitive even with &ignorecase off')
+unlet g:sgcomplete_ignorecase
 
 " ---------------------------------------------------------------------------
 " 8. End-to-end Insert-mode integration: invoking the mapping opens the

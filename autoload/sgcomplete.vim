@@ -107,7 +107,10 @@ function! s:PrefixStartCol(line, col) abort
 endfunction
 
 " Filter a source's candidates down to those starting with a:prefix.
-" Comparison honors 'ignorecase', matching Vim's own completion behavior.
+" Case-sensitivity is controlled by g:sgcomplete_ignorecase (default: on),
+" a setting private to this plugin -- deliberately independent of Vim's
+" own 'ignorecase' option, so you can have case-insensitive completion
+" here without changing search or built-in completion case-sensitivity.
 " Exposed publicly (rather than kept script-local) so it can be exercised
 " directly by tests without needing a live Insert-mode popup.
 function! sgcomplete#Matches(name, prefix) abort
@@ -124,10 +127,11 @@ function! sgcomplete#Matches(name, prefix) abort
     return copy(candidates)
   endif
 
+  let ignorecase = get(g:, 'sgcomplete_ignorecase', 1)
   let matches = []
   for cand in candidates
     let candhead = strpart(cand, 0, strlen(a:prefix))
-    if &ignorecase
+    if ignorecase
       let matched = tolower(candhead) ==# tolower(a:prefix)
     else
       let matched = candhead ==# a:prefix

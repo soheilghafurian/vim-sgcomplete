@@ -107,6 +107,15 @@ previous whitespace character or the start of the line — the same notion
 of "word" Vim's own keyword completion uses for its start column. If you
 type nothing before invoking, all candidates in that source are shown.
 
+Matching is case-insensitive by default, controlled by *g:sgcomplete_ignorecase*
+(defaults to on / `1` when unset). This is a setting private to this
+plugin, deliberately independent of Vim's own 'ignorecase' option -- so
+you can have case-insensitive completion here without affecting search,
+`/`, `*`, or built-in completion case-sensitivity, and vice versa. Set it
+in your vimrc to change the default for every source: >
+
+    let g:sgcomplete_ignorecase = 0   " case-sensitive matching
+<
 ==============================================================================
 6. COMMANDS                                              *sgcomplete-commands*
 
@@ -193,7 +202,7 @@ Nothing happens when I press my mapping~
 No candidates show up even though the file has content~
     - Make sure the prefix you typed actually matches the start of a line
       in the file (matching is prefix-based from the start of each
-      candidate, honoring 'ignorecase').
+      candidate; see |g:sgcomplete_ignorecase|).
     - Blank lines are ignored by design; make sure you're not looking at
       one.
 
