@@ -1,0 +1,185 @@
+*sgcomplete.txt*   File-backed named autocomplete sources for Vim
+
+==============================================================================
+CONTENTS                                                *sgcomplete-contents*
+
+    1. Introduction ......................... |sgcomplete-introduction|
+    2. Installation ......................... |sgcomplete-installation|
+    3. Registering sources .................. |sgcomplete-register|
+    4. Completion file format ............... |sgcomplete-file-format|
+    5. Usage ................................. |sgcomplete-usage|
+    6. Commands .............................. |sgcomplete-commands|
+    7. Examples ............................... |sgcomplete-examples|
+    8. Troubleshooting ........................ |sgcomplete-troubleshooting|
+    9. Design notes ........................... |sgcomplete-design|
+
+==============================================================================
+1. INTRODUCTION                                      *sgcomplete-introduction*
+
+vim-sgcomplete lets you register any number of plain-text files as
+independent, named autocomplete sources ("names", "companies", "projects",
+...). Each source gets its own insert-mode invocation. Invoking a source
+pops up Vim's native completion menu containing only candidates from that
+source, filtered by the text immediately before the cursor.
+
+vim-sgcomplete never touches 'dictionary', 'thesaurus', 'complete',
+'iskeyword', 'completefunc', 'omnifunc', 'spell', or any other built-in
+completion setting. All of Vim's existing completion (i_CTRL-X_CTRL-K,
+i_CTRL-X_CTRL-T, i_CTRL-X_CTRL-N/P, i_CTRL-X_CTRL-F, i_CTRL-X_CTRL-O,
+i_CTRL-X_CTRL-U/S, spell suggestions, ...) keeps working exactly as before,
+unchanged. See |sgcomplete-design| for how this is achieved.
+
+==============================================================================
+2. INSTALLATION                                      *sgcomplete-installation*
+
+Use any standard plugin manager.
+
+With vim-plug: >
+    Plug 'yourname/vim-sgcomplete'
+<
+With packer.nvim: >
+    use 'yourname/vim-sgcomplete'
+<
+With Vim's native |packages|: >
+    git clone <repo-url> ~/.vim/pack/plugins/start/vim-sgcomplete
+<
+No build step, no dependencies.
+
+==============================================================================
+3. REGISTERING SOURCES                                  *sgcomplete-register*
+
+There are two equivalent ways to register a source. Both take a unique
+name, the path to a completion file, and an insert-mode key sequence that
+invokes that source.
+
+Declarative, in your vimrc (recommended for most users):        *g:sgcomplete_sources*
+>
+    let g:sgcomplete_sources = [
+          \ {'name': 'names',     'file': '~/.vim/completions/names.txt',     'map': '<C-x><C-n>'},
+          \ {'name': 'companies', 'file': '~/.vim/completions/companies.txt', 'map': '<C-x><C-c>'},
+          \ ]
+<
+Programmatic, via the autoload function:                        *sgcomplete#Register()*
+>
+    call sgcomplete#Register('projects', '~/.vim/completions/projects.txt', '<C-x><C-p>')
+<
+Adding a new source never requires writing any completion logic: both
+forms register a file + name + key combination, and the same generic
+filter/insert code in autoload/sgcomplete.vim serves every source.
+
+File paths support `~` and environment-variable expansion (anything
+|expand()| understands).
+
+Note: `'<C-x><C-n>'` above collides with Vim's built-in keyword completion
+(i_CTRL-X_CTRL-N). It is used in this doc only as a short, familiar-looking
+example; pick key sequences that do not collide with mappings you already
+rely on. See |sgcomplete-troubleshooting| for what happens on collision.
+
+==============================================================================
+4. COMPLETION FILE FORMAT                              *sgcomplete-file-format*
+
+- Plain text, one candidate per line.
+- Leading/trailing content on a line is taken verbatim as the candidate,
+  including embedded spaces (e.g. "John Smith" or "Acme Corp").
+- Blank lines (empty, or whitespace-only) are ignored.
+- The file is re-read automatically whenever its mtime changes, so you can
+  edit it and see updated candidates immediately, with no reload command
+  required.
+- A missing, unreadable, or empty file simply yields no candidates for
+  that source; it never raises an error or disrupts editing.
+
+==============================================================================
+5. USAGE                                                    *sgcomplete-usage*
+
+In Insert mode, type the beginning of a candidate, then press the key
+sequence you registered for that source. For example, having registered
+`'names'` on `<C-x><C-n>` with a file containing "John Smith":
+>
+    Jo<C-x><C-n>
+<
+opens Vim's completion popup with "John Smith" (and any other candidate in
+that file starting with "Jo"). Selecting it inserts the complete value
+"John Smith".
+
+The filter text is whatever is immediately before the cursor, up to the
+previous whitespace character or the start of the line — the same notion
+of "word" Vim's own keyword completion uses for its start column. If you
+type nothing before invoking, all candidates in that source are shown.
+
+==============================================================================
+6. COMMANDS                                              *sgcomplete-commands*
+
+:SgCompleteSources                                          *:SgCompleteSources*
+    List every registered source, its invocation, and its backing file.
+
+:SgCompleteReload [{name}]                                   *:SgCompleteReload*
+    Force re-reading a source's file from disk on its next invocation.
+    With no argument, invalidates the cache for all sources. Useful if you
+    edited a completion file on a filesystem where mtime granularity might
+    otherwise mask the change.
+
+==============================================================================
+7. EXAMPLES                                                *sgcomplete-examples*
+
+Register three independent sources: >
+
+    let g:sgcomplete_sources = [
+          \ {'name': 'names',     'file': '~/.vim/completions/names.txt',     'map': '<C-x><C-n>'},
+          \ {'name': 'companies', 'file': '~/.vim/completions/companies.txt', 'map': '<C-x><C-c>'},
+          \ {'name': 'projects',  'file': '~/.vim/completions/projects.txt',  'map': '<C-x><C-r>'},
+          \ ]
+<
+`~/.vim/completions/names.txt`: >
+
+    John Smith
+    Jane Doe
+    Jordan Lee
+<
+While editing, typing `Jo<C-x><C-n>` shows "John Smith" and "Jordan Lee"
+only — never candidates from companies.txt or projects.txt.
+
+==============================================================================
+8. TROUBLESHOOTING                                  *sgcomplete-troubleshooting*
+
+Nothing happens when I press my mapping~
+    - Check `:SgCompleteSources` to confirm the source registered. If it's
+      missing, another plugin or your vimrc likely already owns that key
+      sequence: vim-sgcomplete never overwrites an existing insert-mode
+      mapping, and instead prints a warning (`:messages`) and skips
+      registration. Pick a different key sequence.
+    - Confirm the backing file exists and is readable: a missing or
+      unreadable file yields an empty (but harmless) candidate list.
+
+No candidates show up even though the file has content~
+    - Make sure the prefix you typed actually matches the start of a line
+      in the file (matching is prefix-based from the start of each
+      candidate, honoring 'ignorecase').
+    - Blank lines are ignored by design; make sure you're not looking at
+      one.
+
+I edited the completion file but still see old candidates~
+    - The file is re-read when its mtime changes; on filesystems with
+      coarse mtime resolution this can occasionally lag. Run
+      `:SgCompleteReload` (optionally with the source name) to force a
+      re-read.
+
+My existing dictionary/omni/keyword completion stopped working~
+    - It shouldn't: vim-sgcomplete never sets 'completefunc', 'omnifunc',
+      'dictionary', 'thesaurus', or 'iskeyword', and only ever adds new
+      mappings, never replacing existing ones. If you observe otherwise,
+      it's a conflict with another plugin, not vim-sgcomplete.
+
+==============================================================================
+9. DESIGN NOTES                                              *sgcomplete-design*
+
+Each registered source gets a dedicated |:map-expr| insert-mode mapping.
+Invoking it calls |complete()| directly with a start column and an
+already-filtered candidate list computed from that source's file. This is
+deliberate: |complete()| can be invoked at any time to open the popup menu,
+independently of 'completefunc' and 'omnifunc' — the two options that back
+i_CTRL-X_CTRL-U and i_CTRL-X_CTRL-O respectively. Because vim-sgcomplete
+never reads or writes those options (or 'dictionary', 'thesaurus',
+'iskeyword', 'spell'), every native completion mechanism keeps behaving
+exactly as it did before installing this plugin.
+
+ vim:tw=78:ts=8:ft=help:norl:
